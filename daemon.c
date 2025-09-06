@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <unistd.h>
 
 int port;
 char imgsOut[50];
@@ -34,17 +35,21 @@ void GetConfig() {
 }
 
 void WriteLog() {
-    const char *filename = "log/logs.txt";
+    const char *filename = "/home/andres/Documents/tarea-operativos/log/logs.txt";
     FILE *file = fopen(filename, "a");
 
-    fprintf(file, "Estoy escribiendo en el log! \n");
+    fprintf(file, "Un daemon escribiendo \n");
 
     fclose(file);
 }
 
 int main() {
     GetConfig();
-    WriteLog();
+    
+    while(1) {
+        WriteLog();
+        sleep(5);
+    }
 
     return 0;
 }
