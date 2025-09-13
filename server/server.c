@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
+#include <fcntl.h>
+#include "handle_client.h"
 
 void* accept_loop(void* arg){
     int sfd = (int)(intptr_t)arg;
@@ -25,8 +27,13 @@ void* accept_loop(void* arg){
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &cli.sin_addr, ip, sizeof(ip));
         printf("Cliente conectado %s:%d\n", ip, ntohs(cli.sin_port));
-        sleep(100); // simular trabajo
-        close(cfd);
+        pthread_t w;
+        if (pthread_create(&w, NULL, handle_client, (void*)(intptr_t)cfd) != 0) {
+            perror("[srv] pthread_create");
+            close(cfd);
+            continue;
+        }
+        pthread_detach(w);
 
     }
     return NULL;

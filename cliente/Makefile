@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror -O2 -Iinclude
+CFLAGS = -Wall -Wextra -O2 -Iinclude
 
 SRC = src/client.c \
       src/helpers/listdir.c \
