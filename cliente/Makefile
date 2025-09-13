@@ -1,11 +1,18 @@
-CC=gcc
-CFLAGS=-Wall -O2
-TARGET=client
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror -O2 -Iinclude
 
-all: $(TARGET)
+SRC = src/client.c \
+      src/helpers/listdir.c \
+      src/helpers/file_metadata.c \
+      src/helpers/send_data.c \
+	  src/helpers/ui_client.c
 
-$(TARGET): client.c
-	$(CC) $(CFLAGS) -o $(TARGET) client.c
+OBJ = $(SRC:.c=.o)
+
+all: client
+
+client: $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $(OBJ)
 
 clean:
-	rm -f $(TARGET)
+	rm -f client $(OBJ)

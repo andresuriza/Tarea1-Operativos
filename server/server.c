@@ -25,6 +25,7 @@ void* accept_loop(void* arg){
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &cli.sin_addr, ip, sizeof(ip));
         printf("Cliente conectado %s:%d\n", ip, ntohs(cli.sin_port));
+        sleep(100); // simular trabajo
         close(cfd);
 
     }
