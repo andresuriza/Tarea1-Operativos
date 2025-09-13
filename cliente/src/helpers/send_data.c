@@ -45,12 +45,7 @@ int send_header_and_name(int sock, const char *filename) {
     uint8_t ack;
     if (recv_exact(sock, &ack, 1) != 0 || ack != 0xAA) { errno=EPROTO; return -1; }
 
-    // 2) LEN
-    uint16_t net_len = htons((uint16_t)strlen(filename));
-    if (send_all(sock, &net_len, 2) != 0) return -1;
-    if (recv_exact(sock, &ack, 1) != 0 || ack != 0xAA) { errno=EPROTO; return -1; }
-
-    // 3) NAME
+    // 2) NAME
     size_t name_len = strlen(filename);
     if (send_all(sock, filename, name_len) != 0) return -1;
     if (recv_exact(sock, &ack, 1) != 0 || ack != 0xAA) { errno=EPROTO; return -1; }
