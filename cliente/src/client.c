@@ -65,7 +65,7 @@ int main() {
         return 1;
     }
 
-    if (send_header_and_name(sock, filename) != 0) {
+    if (send_data(sock, filename) != 0) {
         perror("[cliente] fallo al enviar header/nombre");
         free_string_array(names, count);
         close(sock);

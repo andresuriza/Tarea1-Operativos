@@ -4,8 +4,15 @@
 #include <string.h>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include "file_metadata.h"
-static int send_all(int fd, const void *buf, size_t len) {
+#include <unistd.h>
+#include "wire.h"
+
+#define CHUNK (64*1024u)
+int send_file_data(int sock, const char *filename, uint64_t *filesize);
+
+int send_all(int fd, const void *buf, size_t len) {
     const unsigned char *p = (const unsigned char*)buf;
     size_t left = len;
     while (left) {
@@ -21,7 +28,7 @@ static void dump_hex(const unsigned char *p, size_t n) {
     for (size_t i=0;i<n;i++) printf("%02x%s", p[i], i+1<n?" ":"\n");
 }
 
-static int recv_exact(int fd, void *buf, size_t n){
+int recv_exact(int fd, void *buf, size_t n){
     uint8_t *p=buf; size_t left=n;       // puntero al buffer y cuántos bytes faltan
     while(left){
         ssize_t r = recv(fd, p, left, 0); // intenta leer "left" bytes del socket
@@ -36,7 +43,7 @@ static int recv_exact(int fd, void *buf, size_t n){
 }
 
 
-int send_header_and_name(int sock, const char *filename) {
+int send_data(int sock, const char *filename) {
     uint8_t header[11];
     build_header_v2(header, filename);
 
@@ -49,6 +56,77 @@ int send_header_and_name(int sock, const char *filename) {
     size_t name_len = strlen(filename);
     if (send_all(sock, filename, name_len) != 0) return -1;
     if (recv_exact(sock, &ack, 1) != 0 || ack != 0xAA) { errno=EPROTO; return -1; }
-
+    // 3) FILE DATA
+    uint64_t fsize_net;
+    memcpy(&fsize_net, header + 2, sizeof(uint64_t));
+    uint64_t fsize = ntohll_u64(fsize_net);
+    if (send_file_data(sock, filename, &fsize) != 0) return -1;
     return 0;
+}
+
+int send_file_data(int sock, const char *filename, uint64_t *filesize){
+    char fullpath[512];
+    snprintf(fullpath, sizeof fullpath, "/data/%s", filename);
+    int fd = open(fullpath, O_RDONLY);
+    if(fd < 0) {
+        perror("open");
+        return -1;
+    }
+    uint64_t offset = 0;
+    if(lseek(fd,0, SEEK_SET)< 0){
+        perror("lseek start");
+        close(fd);
+        return -1;
+    }
+    unsigned char buffer[CHUNK];
+    while (offset < *filesize){
+        size_t to_read = (size_t)((*filesize - offset) < CHUNK ? (*filesize - offset) : CHUNK); 
+        ssize_t r = read(fd, buffer, to_read);
+        if (r < 0) {
+            if(errno == EINTR) continue;
+            perror("read");
+            close(fd);
+            return -1;
+        }
+        if(r==0){
+            fprintf(stderr, "EOF inesperado\n");
+            close(fd);
+            return -1;
+        }
+        if(send_all(sock, buffer, (size_t)r) != 0){
+            perror("send chunk");
+            close(fd);
+            return -1;
+        }
+        ack_t ack;
+        if(recv_exact(sock, &ack, sizeof ack) != 0){
+            perror("recv ack");
+            close(fd);
+            return -1;
+        }
+        if (ack.code != ACK_CODE_CNTN) {
+            errno = EPROTO;
+            fprintf(stderr, "ACK code invalido: 0x%02x\n", ack.code);
+            close(fd);
+            return -1;
+        }
+        uint64_t next = ntohll_u64(ack.next_offset);
+        uint64_t sent_end = offset + (uint64_t)r;
+        if (next > *filesize || next < offset || next > sent_end) {
+            fprintf(stderr, "ACK next_offset fuera de rango (offset=%llu, sent_end=%llu, next=%llu)\n",
+                    (unsigned long long)offset, (unsigned long long)sent_end, (unsigned long long)next);
+            close(fd); return -1;
+        }
+
+        // 6) si el server ancló menos, nos “devolvemos”
+        if (next != sent_end) {
+            if (lseek(fd, (off_t)next, SEEK_SET) < 0) { perror("lseek back"); close(fd); return -1; }
+        }
+
+        offset = next;
+    }
+    close(fd);
+    return 0;
+
+
 }

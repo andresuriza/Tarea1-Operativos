@@ -5,7 +5,8 @@ SRC = src/client.c \
       src/helpers/listdir.c \
       src/helpers/file_metadata.c \
       src/helpers/send_data.c \
-	  src/helpers/ui_client.c
+	  src/helpers/ui_client.c \
+	  src/helpers/wire.c
 
 OBJ = $(SRC:.c=.o)
 
