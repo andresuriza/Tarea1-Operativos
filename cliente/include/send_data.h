@@ -13,6 +13,6 @@ void dump_hex(const unsigned char *p, size_t n);
 
 // Construye el header v2 y envía header + nombre del archivo.
 // Devuelve 0 si OK, -1 si error.
-int send_header_and_name(int sock, const char *filename);
+int send_data(int sock, const char *filename);
 
 #endif // SEND_UTILS_H
