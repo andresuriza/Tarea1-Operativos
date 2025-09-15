@@ -14,7 +14,6 @@
 
 
 
-
 int main() {
 
     const char *server_name = "host.docker.internal";
@@ -47,32 +46,29 @@ int main() {
     }
 
     printf("[cliente] Conectado a %s:%d\n", server_name, port);
+    while (1) {
+        size_t count=0;
+        char **names = show_image_menu("/data", &count);
+        if (!names) { /* maneja sin terminar el proceso si querés */ break; }
 
-    size_t count = 0;
-
-    char **names = show_image_menu("/data", &count);
-
-    if (!names) {
-        printf("No se encontraron imágenes\n");
-        close(sock);
-        return 1;
-    }
-
-    char filename[MAX_NAME];
-    if (!prompt_and_validate_filename(filename, sizeof filename, names, count)) {
+        char filename[MAX_NAME];
+        prompt_res_t r = prompt_and_validate_filename(filename, sizeof filename, names, count);
+        if (r == PROMPT_EXIT) {
+            free_string_array(names, count);
+            // enviar EXIT aquí:
+            if (send_exit(sock) != 0) { /* log error */ }
+            break; // salir del while → luego close(sock)
+        } else if (r == PROMPT_SELECTED) {
+            // enviar archivo aquí:
+            if (send_data(sock, filename) != 0) { /* log error y decidir si continuar */ }
+            // seguir en el while para otra imagen
+        } else if (r == PROMPT_AGAIN) {
+            // no salir: volver a mostrar el menú
+        } else { // PROMPT_ERROR
+            // decide si romper el loop o volver a intentar
+        }
         free_string_array(names, count);
-        close(sock);
-        return 1;
     }
-
-    if (send_data(sock, filename) != 0) {
-        perror("[cliente] fallo al enviar header/nombre");
-        free_string_array(names, count);
-        close(sock);
-        return 1;
-    }
-
-    free_string_array(names, count);
 
     close(sock);
     return 0;

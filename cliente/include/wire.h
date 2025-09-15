@@ -4,6 +4,7 @@
 
 #define ACK_CODE_OK 0xAA
 #define ACK_CODE_CNTN 0x55
+#define OP_END 0xFF
 
 #pragma pack(push, 1)  // ← fuerza alineación 1 byte
 typedef struct {

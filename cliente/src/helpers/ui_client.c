@@ -3,26 +3,34 @@
 #include <string.h>   
 #include "listdir.h" 
 #include "ui_client.h"
+#include <strings.h> // para strcasecmp()
 
-
-int prompt_and_validate_filename(char *out, size_t cap,
-                                 char **names, size_t count) {
-    printf("Ingrese el nombre del archivo a procesar: ");
+prompt_res_t prompt_and_validate_filename(char *out, size_t cap,
+                                          char **names, size_t count) {
+    printf("Ingrese el nombre del archivo a procesar (o EXIT para terminar): ");
+    
     if (fgets(out, cap, stdin) == NULL) {
-        printf("Error leyendo el nombre del archivo\n");
-        return 0;
+        printf("Error leyendo la entrada\n");
+        return PROMPT_ERROR;
     }
-    out[strcspn(out, "\n")] = '\0'; // quitar '\n'
 
-    // Validar que esté en la lista
+    // Eliminar el salto de línea final
+    out[strcspn(out, "\n")] = '\0';
+
+    // Verificar si es "EXIT" (ignorar mayúsculas/minúsculas)
+    if (strcasecmp(out, "EXIT") == 0) {
+        return PROMPT_EXIT;
+    }
+
+    // Validar si está en la lista de nombres
     for (size_t i = 0; i < count; i++) {
         if (strcmp(out, names[i]) == 0) {
-            return 1; // encontrado y válido
+            return PROMPT_SELECTED;
         }
     }
 
-    printf("[cliente] El archivo '%s' no está en la lista\n", out);
-    return 0;
+    printf("[cliente] El archivo '%s' no está en la lista. Intente de nuevo.\n", out);
+    return PROMPT_AGAIN;
 }
 
 char **show_image_menu(const char *path, size_t *count) {
