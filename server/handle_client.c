@@ -200,11 +200,14 @@ void* handle_client(void *arg) {
 
         if (send_ack(cfd) != 0) { close(cfd); return NULL; }
 
-        // Fin de sesión
+        // Fin de lote 
         if (hdr.file_type == OP_END) {
-            printf("[srv] fin de sesión (OP_END)\n");
-            break;
+            printf("[srv] fin de lote (OP_END). elementos en cola: %zu\n", pqueue_count());
+            // (opcional) pqueue_dump();
+            pqueue_clear();   // ← aquí se empieza un lote NUEVO
+            continue;         // seguir leyendo más headers en la misma conexión
         }
+
 
         // Nombre
         char namebuf[513];

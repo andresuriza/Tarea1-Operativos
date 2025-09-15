@@ -5,11 +5,26 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <signal.h>
+#include <unistd.h>
+
 #include "listdir.h"
 #include "file_metadata.h"
 #include "send_data.h"
 #include "ui_client.h"
+
 #define MAX_NAME 256
+
+static volatile sig_atomic_t g_stop = 0; // ctrl+c presionado
+static int g_sock = -1;               // para que el handler lo cierre
+
+static void on_sigint(int sig) {
+    (void)sig;
+    if (g_sock >= 0) { close(g_sock); g_sock = -1; }
+    // devolver la acción por defecto y re-disparar SIGINT para terminar
+    signal(SIGINT, SIG_DFL);
+    raise(SIGINT);
+}
 
 
 
@@ -20,11 +35,16 @@ int main() {
     struct hostent *he = gethostbyname(server_name);
     const int port = 1717;
 
+    signal(SIGPIPE, SIG_IGN);
+
+
     int sock = socket(AF_INET,SOCK_STREAM,0);
     if (sock <0){
         perror("Socket creation failed");
         return 1;
     }
+    g_sock = sock;                 // el handler sabrá qué cerrar
+    signal(SIGINT, on_sigint); 
 
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -53,19 +73,25 @@ int main() {
 
         char filename[MAX_NAME];
         prompt_res_t r = prompt_and_validate_filename(filename, sizeof filename, names, count);
-        if (r == PROMPT_EXIT) {
+        switch (r) {
+        case PROMPT_EXIT:
+            if (send_exit(sock) != 0) perror("[cliente] EXIT falló");
+            // NO break del while → inicia otro lote si quieres
+            printf("[cliente] Lote enviado");
+            break;
+        case PROMPT_SELECTED:
+            if (send_data(sock, filename) != 0) perror("[cliente] envío falló");
+            break;
+        case PROMPT_AGAIN:
+            break;
+        case PROMPT_ERROR:
+            fprintf(stderr, "[cliente] error leyendo entrada\n");
+            break;
+        case PROMPT_CLOSE:
+            printf("[cliente] Cerrando conexión\n");
+            close(sock);
             free_string_array(names, count);
-            // enviar EXIT aquí:
-            if (send_exit(sock) != 0) { /* log error */ }
-            break; // salir del while → luego close(sock)
-        } else if (r == PROMPT_SELECTED) {
-            // enviar archivo aquí:
-            if (send_data(sock, filename) != 0) { /* log error y decidir si continuar */ }
-            // seguir en el while para otra imagen
-        } else if (r == PROMPT_AGAIN) {
-            // no salir: volver a mostrar el menú
-        } else { // PROMPT_ERROR
-            // decide si romper el loop o volver a intentar
+            break;
         }
         free_string_array(names, count);
     }

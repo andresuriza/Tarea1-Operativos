@@ -75,3 +75,8 @@ void pqueue_dump(void){
     }
     pthread_mutex_unlock(&Q.m);
 }
+void pqueue_clear(void){
+    pthread_mutex_lock(&Q.m);
+    Q.n = 0;                  // vacía (no libera memoria)
+    pthread_mutex_unlock(&Q.m);
+}
