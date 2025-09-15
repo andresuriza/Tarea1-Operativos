@@ -11,6 +11,10 @@
 #include "handle_client.h"
 
 void* accept_loop(void* arg){
+    if (pqueue_init() != 0) {
+    fprintf(stderr, "pqueue_init failed\n");
+    return 1;
+    }
     int sfd = (int)(intptr_t)arg;
     while(1){
         struct sockaddr_in cli;

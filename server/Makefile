@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -pthread
 TARGET = server
-SRCS = server.c handle_client.c socket_helpers.c
+SRCS = server.c handle_client.c socket_helpers.c pqueue.c
 OBJS = $(SRCS:.c=.o)
 
 .PHONY: all clean
