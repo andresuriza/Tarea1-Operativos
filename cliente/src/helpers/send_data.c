@@ -63,6 +63,19 @@ int send_data(int sock, const char *filename) {
     if (send_file_data(sock, filename, &fsize) != 0) return -1;
     return 0;
 }
+int send_exit(int sock) {
+    uint8_t header[11] = {0}; // todos ceros
+    header[10] = OP_END;      // posición del file_type
+    if (send_all(sock, header, sizeof header) != 0) return -1;
+
+    uint8_t ack;
+    if (recv_exact(sock, &ack, 1) != 0 || ack != 0xAA) {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
 
 int send_file_data(int sock, const char *filename, uint64_t *filesize){
     char fullpath[512];
