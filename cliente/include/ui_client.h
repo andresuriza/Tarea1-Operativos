@@ -7,7 +7,8 @@ typedef enum {
     PROMPT_SELECTED = 1,
     PROMPT_EXIT     = 0,
     PROMPT_AGAIN    = -1,
-    PROMPT_ERROR    = -2
+    PROMPT_ERROR    = -2,
+    PROMPT_CLOSE    = -3
 } prompt_res_t;
 
 

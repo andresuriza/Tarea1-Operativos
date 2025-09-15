@@ -5,25 +5,70 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <errno.h>
-#include "handle_client.h"
-#include "socket_helpers.h"
 #include <string.h>
 #include <sys/stat.h>
+#include <stdlib.h>
+
+#include "handle_client.h"
+#include "socket_helpers.h"
+#include "pqueue.h"
+#include <stdlib.h>  // por malloc/free (si no lo tenías)
+
+// ===== Definiciones WIRE locales (copiadas del cliente) =====
+#define ACK_CODE_OK   0xAA
+#define ACK_CODE_CNTN 0x55
+#define OP_END        0xFF
+
+
+#ifndef CHUNK_SIZE
+#define CHUNK_SIZE (64*1024u)
+#endif
+
+#ifndef OP_END
+#define OP_END 0xFF
+#endif
+
+// ===== Helpers de endian =====
+static inline uint64_t htobe64_u64(uint64_t x){
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    return __builtin_bswap64(x);
+#else
+    return x;
+#endif
+}
+
+// ===== Lógica existente (con ajustes mínimos) =====
+
 int recv_header(int cfd, header_v2_t *out) {
     uint8_t hdr[11];
     if (recv_exact(cfd, hdr, sizeof hdr) != 0) return -1;
 
-    out->name_len = ((uint16_t)hdr[0] << 8) | hdr[1];
-    if (out->name_len == 0 || out->name_len > 512) return -1;
+    uint16_t name_len = ((uint16_t)hdr[0] << 8) | hdr[1];
 
     uint64_t raw;
     memcpy(&raw, &hdr[2], 8);
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    out->file_size = __builtin_bswap64(raw);
+    uint64_t file_size = __builtin_bswap64(raw);
 #else
-    out->file_size = raw;
+    uint64_t file_size = raw;
 #endif
-    out->file_type = hdr[10];
+
+    uint8_t file_type = hdr[10];
+
+    // Permitir END (sin nombre ni tamaño)
+    if (file_type == OP_END) {
+        out->name_len = 0;
+        out->file_size = 0;
+        out->file_type = OP_END;
+        return 0;
+    }
+
+    // Validación normal
+    if (name_len == 0 || name_len > 512) return -1;
+
+    out->name_len = name_len;
+    out->file_size = file_size;
+    out->file_type = file_type;
     return 0;
 }
 
@@ -52,15 +97,12 @@ static int ensure_dir(const char *p, mode_t mode) {
 
 int prepare_output_path(char *out_path, size_t cap,
                         const char *namebuf, const char *type_str) {
-    // 1) asegurar raíz
     if (ensure_dir("uploads", 0755) != 0) return -1;
 
-    // 2) asegurar subcarpeta por tipo
     char folder[256];
     snprintf(folder, sizeof folder, "uploads/%s", type_str);
     if (ensure_dir(folder, 0755) != 0) return -1;
 
-    // 3) construir path final
     snprintf(out_path, cap, "%s/%s", folder, namebuf);
     return 0;
 }
@@ -73,19 +115,11 @@ int send_ack(int cfd) {
 int open_and_truncate(const char *path, uint64_t file_size) {
     int fd = open(path, O_CREAT | O_RDWR | O_TRUNC, 0644);
     if (fd < 0) return -1;
-    if (ftruncate(fd, file_size) != 0) {
+    if (ftruncate(fd, (off_t)file_size) != 0) {
         close(fd);
         return -1;
     }
     return fd;
-}
-// Endianness helper
-static inline uint64_t htobe64_u64(uint64_t x){
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-    return __builtin_bswap64(x);
-#else
-    return x;
-#endif
 }
 
 // Envía ACK de "continuar" con el offset acumulado (en big-endian)
@@ -110,8 +144,7 @@ static int write_full(int fd, const uint8_t *buf, size_t n){
     return 0;
 }
 
-// Recibe el archivo en chunks de 64 KiB (último puede ser menor).
-// Tras cada chunk persistido, envía ACK_CODE_CNTN con next_offset acumulado.
+// Recibe el archivo en chunks de 64 KiB y ACKea con offset acumulado
 int receive_file_data(int cfd, int outfd, uint64_t file_size){
     uint8_t *buf = malloc(CHUNK_SIZE);
     if (!buf) return -1;
@@ -120,7 +153,6 @@ int receive_file_data(int cfd, int outfd, uint64_t file_size){
     while (offset < file_size){
         size_t target = (size_t)((file_size - offset) < CHUNK_SIZE ? (file_size - offset) : CHUNK_SIZE);
 
-        // Acumular exactamente 'target' bytes antes de ACK (alineado al chunk del cliente)
         size_t got = 0;
         while (got < target){
             ssize_t r = recv(cfd, buf + got, target - got, 0);
@@ -133,7 +165,6 @@ int receive_file_data(int cfd, int outfd, uint64_t file_size){
             got += (size_t)r;
         }
 
-        // Persistir el bloque recibido (maneja escrituras parciales)
         if (write_full(outfd, buf, got) != 0){
             free(buf);
             return -1;
@@ -141,7 +172,6 @@ int receive_file_data(int cfd, int outfd, uint64_t file_size){
 
         offset += got;
 
-        // ACK con el total persistido hasta ahora (big-endian en el wire)
         if (send_ack_cntn(cfd, offset) != 0){
             free(buf);
             return -1;
@@ -153,57 +183,80 @@ int receive_file_data(int cfd, int outfd, uint64_t file_size){
     return 0;
 }
 
-
+// ===== LOOP por sesión: múltiples archivos hasta OP_END =====
 void* handle_client(void *arg) {
     int cfd = (int)(intptr_t)arg;
 
-    // Asegurar modo bloqueante
+    // Bloqueante
     int fl = fcntl(cfd, F_GETFL, 0);
     if (fl & O_NONBLOCK) fcntl(cfd, F_SETFL, fl & ~O_NONBLOCK);
 
-    // 1. Header
-    header_v2_t hdr;
-    if (recv_header(cfd, &hdr) != 0) { close(cfd); return NULL; }
-    printf("[srv] header recibido: name_len=%u, file_size=%llu, type=0x%02X\n",
-        hdr.name_len, (unsigned long long)hdr.file_size, hdr.file_type);
-    if (send_ack(cfd) != 0) { close(cfd); return NULL; }
+    for (;;) {
+        header_v2_t hdr;
+        if (recv_header(cfd, &hdr) != 0) { close(cfd); return NULL; }
 
-    // 2. Nombre de archivo
-    char namebuf[513];
-    if (recv_filename(cfd, namebuf, sizeof namebuf, hdr.name_len) != 0) {
-        perror("[srv] recv filename");
-        close(cfd); return NULL;
-    }
-    printf("[srv] nombre de archivo: %s\n", namebuf);
-    if (send_ack(cfd) != 0) { close(cfd); return NULL; }
+        printf("[srv] header: name_len=%u, file_size=%llu, type=0x%02X\n",
+               hdr.name_len, (unsigned long long)hdr.file_size, hdr.file_type);
 
-    // 3. Ruta de salida
-    const char *type_str = file_type_str(hdr.file_type);
-    char path[512];
-    if (prepare_output_path(path, sizeof path, namebuf, type_str) != 0) {
-        close(cfd);
-        return NULL;
-    }
+        if (send_ack(cfd) != 0) { close(cfd); return NULL; }
 
-    // 4. Crear y truncar
-    int outfd = open_and_truncate(path, hdr.file_size);
-    if (outfd < 0) {
-        perror("[srv] open/truncate");
-        close(cfd); return NULL;
-    }
+        // Fin de lote 
+        if (hdr.file_type == OP_END) {
+            printf("[srv] fin de lote (OP_END). elementos en cola: %zu\n", pqueue_count());
+            // (opcional) pqueue_dump();
+            pqueue_clear();   // ← aquí se empieza un lote NUEVO
+            continue;         // seguir leyendo más headers en la misma conexión
+        }
 
-    // (Todavía no se recibe el contenido, se hace después)
 
-    printf("[srv] ACK por nombre enviado y archivo preparado\n");
-    if (receive_file_data(cfd, outfd, hdr.file_size) != 0){
-        perror("[srv] receive_file_data");
+        // Nombre
+        char namebuf[513];
+        if (recv_filename(cfd, namebuf, sizeof namebuf, hdr.name_len) != 0) {
+            perror("[srv] recv filename");
+            close(cfd); return NULL;
+        }
+        printf("[srv] nombre: %s\n", namebuf);
+
+        if (send_ack(cfd) != 0) { close(cfd); return NULL; }
+
+        // Path salida
+        const char *type_str = file_type_str(hdr.file_type);
+        char path[512];
+        if (prepare_output_path(path, sizeof path, namebuf, type_str) != 0) {
+            close(cfd); return NULL;
+        }
+
+        // Crear y recibir
+        int outfd = open_and_truncate(path, hdr.file_size);
+        if (outfd < 0) { perror("[srv] open/truncate"); close(cfd); return NULL; }
+
+        if (receive_file_data(cfd, outfd, hdr.file_size) != 0){
+            perror("[srv] receive_file_data");
+            close(outfd); close(cfd); return NULL;
+        }
         close(outfd);
-        close(cfd);
-        return NULL;
+
+        printf("[srv] archivo completo: %s (%llu bytes)\n",
+               path, (unsigned long long)hdr.file_size);
+
+        // Encolar metadatos en pqueue
+        pqueue_entry_t e = {0};
+        snprintf(e.name, sizeof e.name, "%s", namebuf);
+        snprintf(e.path, sizeof e.path, "%s", path);
+        e.size = hdr.file_size;
+        e.type = hdr.file_type;
+
+        if (pqueue_push(&e) != 0) {
+            fprintf(stderr, "[srv] no se pudo encolar %s\n", namebuf);
+        } else {
+            printf("[srv] encolado: %s (%llu B), pend=%zu\n",
+                   e.name, (unsigned long long)e.size, pqueue_count());
+                   pqueue_dump(); 
+        }
+
+        // vuelve al inicio y espera otro header
     }
 
-    printf("[srv] archivo completo: %s (%llu bytes)\n", path, (unsigned long long)hdr.file_size);
-    close(outfd);
     close(cfd);
     return NULL;
 }

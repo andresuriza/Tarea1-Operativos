@@ -13,6 +13,7 @@ prompt_res_t prompt_and_validate_filename(char *out, size_t cap,
         printf("Error leyendo la entrada\n");
         return PROMPT_ERROR;
     }
+    
 
     // Eliminar el salto de línea final
     out[strcspn(out, "\n")] = '\0';
@@ -20,6 +21,9 @@ prompt_res_t prompt_and_validate_filename(char *out, size_t cap,
     // Verificar si es "EXIT" (ignorar mayúsculas/minúsculas)
     if (strcasecmp(out, "EXIT") == 0) {
         return PROMPT_EXIT;
+    }
+    else if (strcasecmp(out, "CLOSE") == 0) {
+        return PROMPT_CLOSE;
     }
 
     // Validar si está en la lista de nombres
