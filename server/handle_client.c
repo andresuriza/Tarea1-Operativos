@@ -13,6 +13,7 @@
 #include "socket_helpers.h"
 #include "pqueue.h"
 #include <stdlib.h>  // por malloc/free (si no lo tenías)
+#include "ImgFunciones.c"
 
 // ===== Definiciones WIRE locales (copiadas del cliente) =====
 #define ACK_CODE_OK   0xAA
@@ -204,6 +205,15 @@ void* handle_client(void *arg) {
         if (hdr.file_type == OP_END) {
             printf("[srv] fin de lote (OP_END). elementos en cola: %zu\n", pqueue_count());
             // (opcional) pqueue_dump();
+            size_t count = pqueue_count();
+
+            for (size_t i = 0; i < count; i++)
+            {
+               CalcHist(pqueue_get_path(i));
+               Clasificar(pqueue_get_path(i));
+            }
+            
+            
             pqueue_clear();   // ← aquí se empieza un lote NUEVO
             continue;         // seguir leyendo más headers en la misma conexión
         }

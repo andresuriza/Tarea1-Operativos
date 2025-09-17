@@ -12,6 +12,16 @@ typedef struct {
 
 static pqueue_t Q;
 
+const char* pqueue_get_path(size_t pos) {
+    const char* result = NULL;
+    pthread_mutex_lock(&Q.m);
+    if (pos < Q.n) {
+        result = Q.a[pos].path;
+    }
+    pthread_mutex_unlock(&Q.m);
+    return result;
+}
+
 int pqueue_init(void){
     memset(&Q, 0, sizeof Q);
     if (pthread_mutex_init(&Q.m, NULL) != 0) return -1;
