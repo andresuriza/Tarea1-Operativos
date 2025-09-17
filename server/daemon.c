@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
+#include "ImgFunciones.c"
 
 int port;
 char imgsOut[50];
@@ -48,14 +49,10 @@ void WriteLog()
 }
 
 int main() {
-    GetConfig();
-    
-    // Mantener activo siempre
-    while(1) 
-    {
-        WriteLog();
-        sleep(5);
-    }
+    GetConfig(imgsIn);
+
+    CalcHist(imgsIn);
+    Clasificar(imgsIn);
 
     return 0;
 }
