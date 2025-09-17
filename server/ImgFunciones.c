@@ -387,9 +387,9 @@ void Clasificar(const char* img_in) {
         p_error("Error al escribir PNG.");
     }
 
+// Calcula histograma de ecualizacion a partir de imagen
 void CalcHist(const char* in_path) {
-    //const char* out_path = "../imagenes_out/Histograma/out.jpg";
-    const char* out_path = Get_Dirhisto();
+    const char* out_root = Get_Dirhisto();
     // Cambiar a 1 si es YCbCr, (solo luminancia)
     int mode_rgb = 0; 
 
@@ -413,9 +413,13 @@ void CalcHist(const char* in_path) {
 
     Ecualizador(img, w, h, ch, mode_rgb);
 
-    if (!WriteFile(out_path, w, h, ch, img)) 
-    {
-        stbi_image_free(img);
-        p_error("Error al escribir imagen");
-    }
+    CheckDir(out_root); 
+    const char* base = GetFileN(in_path); 
+    
+    char out_path[1200];
+    snprintf(out_path, sizeof(out_path), "%s%c%s", out_root, PATHSEP, base);
+
+    int ok = stbi_write_png(out_path, w, h, ch, img, w * ch);
+    stbi_image_free(img);
+    if (!ok) p_error("Error al escribir PNG.");
 }
