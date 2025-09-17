@@ -11,6 +11,9 @@ WORKDIR /app
 COPY include/ include/
 COPY src/ src/
 COPY Makefile ./
+COPY config.conf config.conf
+
+
 
 # Fuerza recompilación limpia y verbo para ver qué linkea
 RUN make clean && make -B client
