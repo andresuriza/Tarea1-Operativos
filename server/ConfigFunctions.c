@@ -1,5 +1,7 @@
 #include <unistd.h>
 #include <stdarg.h>
+#include <stdio.h>"
+#include <stdlib.h>
 
 const char *filename = "/etc/server/config.conf";
 

@@ -9,7 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include "handle_client.h"
-#include "ConfigFunctions.c"
+#include "ConfigFunctions.h"
 
 void* accept_loop(void* arg){
     if (pqueue_init() != 0) {

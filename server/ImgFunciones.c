@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "ConfigFunctions.h"
 
 #define MKDIR(p) mkdir(p, 0755)
 #define PATHSEP '/'

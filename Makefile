@@ -7,7 +7,10 @@ SRCS = $(SRCDIR)/server.c \
        $(SRCDIR)/handle_client.c \
        $(SRCDIR)/socket_helpers.c \
        $(SRCDIR)/pqueue.c \
-       $(SRCDIR)/read_config.c
+       $(SRCDIR)/read_config.c \
+	   $(SRCDIR)/ConfigFunctions.c\
+	   $(SRCDIR)/ImgFunciones.c
+
 
 OBJS = $(SRCS:.c=.o)
 
