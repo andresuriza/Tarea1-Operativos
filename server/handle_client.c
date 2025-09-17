@@ -13,6 +13,7 @@
 #include "socket_helpers.h"
 #include "pqueue.h"
 #include <stdlib.h>  // por malloc/free (si no lo tenías)
+#include "ConfigFunctions.h"  // por Get_Dircolores y Get_Dirhisto
 
 // ===== Definiciones WIRE locales (copiadas del cliente) =====
 #define ACK_CODE_OK   0xAA
@@ -195,15 +196,24 @@ void* handle_client(void *arg) {
         header_v2_t hdr;
         if (recv_header(cfd, &hdr) != 0) { close(cfd); return NULL; }
 
-        printf("[srv] header: name_len=%u, file_size=%llu, type=0x%02X\n",
+        WriteLog("[srv] header: name_len=%u, file_size=%llu, type=0x%02X\n",
                hdr.name_len, (unsigned long long)hdr.file_size, hdr.file_type);
 
         if (send_ack(cfd) != 0) { close(cfd); return NULL; }
 
         // Fin de lote 
         if (hdr.file_type == OP_END) {
-            printf("[srv] fin de lote (OP_END). elementos en cola: %zu\n", pqueue_count());
+            WriteLog("[srv] fin de lote (OP_END). elementos en cola: %zu\n", pqueue_count());
             // (opcional) pqueue_dump();
+            size_t count = pqueue_count();
+
+            for (size_t i = 0; i < count; i++)
+            {
+               CalcHist(pqueue_get_path(i));
+               Clasificar(pqueue_get_path(i));
+            }
+            
+            
             pqueue_clear();   // ← aquí se empieza un lote NUEVO
             continue;         // seguir leyendo más headers en la misma conexión
         }
@@ -215,7 +225,7 @@ void* handle_client(void *arg) {
             perror("[srv] recv filename");
             close(cfd); return NULL;
         }
-        printf("[srv] nombre: %s\n", namebuf);
+        WriteLog("[srv] nombre: %s\n", namebuf);
 
         if (send_ack(cfd) != 0) { close(cfd); return NULL; }
 
@@ -236,7 +246,7 @@ void* handle_client(void *arg) {
         }
         close(outfd);
 
-        printf("[srv] archivo completo: %s (%llu bytes)\n",
+        WriteLog("[srv] archivo completo: %s (%llu bytes)\n",
                path, (unsigned long long)hdr.file_size);
 
         // Encolar metadatos en pqueue
@@ -249,7 +259,7 @@ void* handle_client(void *arg) {
         if (pqueue_push(&e) != 0) {
             fprintf(stderr, "[srv] no se pudo encolar %s\n", namebuf);
         } else {
-            printf("[srv] encolado: %s (%llu B), pend=%zu\n",
+            WriteLog("[srv] encolado: %s (%llu B), pend=%zu\n",
                    e.name, (unsigned long long)e.size, pqueue_count());
                    pqueue_dump(); 
         }

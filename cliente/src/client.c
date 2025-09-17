@@ -12,6 +12,7 @@
 #include "file_metadata.h"
 #include "send_data.h"
 #include "ui_client.h"
+#include "read_config.h"
 
 #define MAX_NAME 256
 
@@ -29,11 +30,16 @@ static void on_sigint(int sig) {
 
 
 
+
 int main() {
 
     const char *server_name = "host.docker.internal";
     struct hostent *he = gethostbyname(server_name);
-    const int port = 1717;
+    int port = leer_puerto_desde_config("config.conf");
+    if (port <= 0) {
+        fprintf(stderr, "Puerto inválido\n");
+        return 1;
+    }
 
     signal(SIGPIPE, SIG_IGN);
 

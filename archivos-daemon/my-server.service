@@ -1,0 +1,18 @@
+[Unit]
+Description=My Server
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+User=andres
+Group=andres
+WorkingDirectory=/home/andres/Documents/tarea-operativos/server
+Environment=UPLOADS_DIR=/home/andres/Documents/Tarea1-Operativos/server/uploads
+Type=simple
+ExecStart=/home/andres/Documents/tarea-operativos/server/server
+
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=multi-user.target

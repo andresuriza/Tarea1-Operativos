@@ -9,6 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include "handle_client.h"
+#include "ConfigFunctions.h"
 
 void* accept_loop(void* arg){
     if (pqueue_init() != 0) {
@@ -65,7 +66,12 @@ int main(){
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY); // todas las interfaces
-    addr.sin_port = htons(1717);
+    int port = GetPort();
+    if (port <= 0) {
+    fprintf(stderr, "Puerto inválido\n");
+    return 1;
+    }
+    addr.sin_port = htons(port);
 
     if(bind(server_fd, (struct sockaddr*)&addr, sizeof(addr))<0){
         perror("Bind falldo");
@@ -78,7 +84,8 @@ int main(){
         close(server_fd);
         return 1;
     }
-    printf("Servidor escuchando en puerto 1717...\n");
+
+    WriteLog("Servidor escuchando en puerto %d...", port);
     pthread_t th;
     if(pthread_create(&th, NULL, accept_loop,(void*)(intptr_t)server_fd)!=0){
         perror("Error creando thread");
