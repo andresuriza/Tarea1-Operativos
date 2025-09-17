@@ -348,8 +348,9 @@ static void CheckDir(const char* path)
     if (MKDIR(buf) != 0) { /* ignorar si existe */ }
 }
 
+// Lee imagen y clasifica en base a color predominante
 void Clasificar(const char* img_in) {
-    const char* img_out = "../imagenes_out";
+    const char* img_out = Get_Dirhisto();
     
     int w, h, ch;
 

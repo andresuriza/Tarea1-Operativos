@@ -1,6 +1,5 @@
-#include <stdio.h>
 #include <unistd.h>
-#include "ImgFunciones.c"
+#include <stdarg.h>
 
 const char *filename = "/etc/server/config.conf";
 
@@ -59,8 +58,13 @@ char* Get_Dirhisto()
 }
 
 // Funcion para escribir en un log
-void WriteLog(const char* msg) 
+void WriteLog(const char *msg, ...) 
 {
+    char buffer[256];
+    va_list args;
+    va_start(args, msg);
+    vsnprintf(buffer, sizeof(buffer), msg, args);
+    va_end(args);
     int port;
     char* pathColores = malloc(50);
     char* pathHisto = malloc(50);
@@ -84,7 +88,7 @@ void WriteLog(const char* msg)
 
     FILE *log = fopen(pathLog, "a");
 
-    fprintf(log, "%s\n", msg);
+    fprintf(log, "%s\n", buffer);
 
     fclose(log);
 }

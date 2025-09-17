@@ -9,7 +9,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include "handle_client.h"
-#include "read_config.h"
+#include "ConfigFunctions.c"
 
 void* accept_loop(void* arg){
     if (pqueue_init() != 0) {
@@ -66,7 +66,7 @@ int main(){
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY); // todas las interfaces
-    int port = leer_puerto_desde_config("../archivos-daemon/config.conf");
+    int port = GetPort();
     if (port <= 0) {
     fprintf(stderr, "Puerto inválido\n");
     return 1;
@@ -84,7 +84,8 @@ int main(){
         close(server_fd);
         return 1;
     }
-    printf("Servidor escuchando en puerto %d...\n", port);
+
+    WriteLog("Servidor escuchando en puerto %d...", port);
     pthread_t th;
     if(pthread_create(&th, NULL, accept_loop,(void*)(intptr_t)server_fd)!=0){
         perror("Error creando thread");
